@@ -98,6 +98,13 @@ function normaliseUrl(value) {
   }
 }
 
+// Inside the browser extension the page runs in a frame, so navigation targets the whole tab.
+const framed = window.top !== window;
+function openUrl(url) {
+  if (framed) window.open(url, "_top");
+  else location.href = url;
+}
+
 function readStorage(key) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
@@ -204,7 +211,7 @@ function mount(scope) {
     const value = text.trim();
     if (!value) return;
     const direct = /^\S+\.\S{2,}$/.test(value) ? normaliseUrl(value) : null;
-    location.href = direct ?? ENGINES[settings.engine][1] + encodeURIComponent(value);
+    openUrl(direct ?? ENGINES[settings.engine][1] + encodeURIComponent(value));
   }
   scope.listen($("nt-search"), "submit", (event) => {
     event.preventDefault();
@@ -339,7 +346,7 @@ function mount(scope) {
       item.className = "nt-shortcut-item";
       const link = document.createElement(editMode ? "div" : "a");
       link.className = "nt-shortcut";
-      if (!editMode) link.href = shortcut.url;
+      if (!editMode) { link.href = shortcut.url; if (framed) link.target = "_top"; }
       const tile = document.createElement("span");
       tile.className = "nt-tile";
       const shape = document.createElement("m3e-shape");
