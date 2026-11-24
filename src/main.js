@@ -100,6 +100,18 @@ function normaliseUrl(value) {
 
 // Inside the browser extension the page runs in a frame, so navigation targets the whole tab.
 const framed = window.top !== window;
+// Bundled inside the browser extension, remote scripts are blocked, so suggestions use fetch
+// with an optional host permission instead of JSONP.
+const extensionApi = globalThis.browser?.runtime?.id ? globalThis.browser : globalThis.chrome?.runtime?.id ? globalThis.chrome : null;
+const SUGGEST_ORIGIN = "https://suggestqueries.google.com/*";
+async function allowSuggestions() {
+  if (!extensionApi) return true;
+  try {
+    return await extensionApi.permissions.request({ origins: [SUGGEST_ORIGIN] });
+  } catch {
+    return false;
+  }
+}
 function openUrl(url) {
   if (framed) window.open(url, "_top");
   else location.href = url;
@@ -253,15 +265,21 @@ function mount(scope) {
   // Google's suggest endpoint has no CORS, so it is read through JSONP.
   function fetchSuggestions(text) {
     const token = ++suggestToken;
-    const callback = `__ntSuggest${token}`;
-    const script = document.createElement("script");
-    const done = () => { delete window[callback]; script.remove(); };
-    window[callback] = (data) => {
-      done();
+    const accept = (data) => {
       if (token === suggestToken && document.activeElement === query && query.value.trim()) {
         showSuggestions(Array.isArray(data?.[1]) ? data[1].filter((s) => typeof s === "string") : []);
       }
     };
+    if (extensionApi) {
+      fetch(`https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(text)}`)
+        .then((response) => response.json())
+        .then(accept, () => {});
+      return;
+    }
+    const callback = `__ntSuggest${token}`;
+    const script = document.createElement("script");
+    const done = () => { delete window[callback]; script.remove(); };
+    window[callback] = (data) => { done(); accept(data); };
     script.onerror = done;
     script.src = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(text)}&callback=${callback}`;
     document.head.append(script);
@@ -553,7 +571,13 @@ function mount(scope) {
 
   // Generic controls
   for (const control of sheet.querySelectorAll("m3e-switch[data-key]")) {
-    scope.listen(control, "change", () => update({ [control.dataset.key]: control.checked }));
+    scope.listen(control, "change", async () => {
+      if (control.dataset.key === "suggestions" && control.checked && !(await allowSuggestions())) {
+        control.checked = false;
+        return;
+      }
+      update({ [control.dataset.key]: control.checked });
+    });
   }
   for (const control of sheet.querySelectorAll("m3e-segmented-button[data-key]")) {
     scope.listen(control, "change", () => {
