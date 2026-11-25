@@ -572,3 +572,8 @@ html:not(.nt-ready) body { visibility: hidden; }
 .nt-sheet-body { grid-template-columns: minmax(0, 1fr); }
 .nt-sheet-body section { min-width: 0; }
 .nt-engines m3e-button-segment { padding-inline: 4px; }
+
+.nt-about { justify-items: start; }
+.nt-about m3e-button svg { width: 18px; height: 18px; fill: currentColor; }
+.nt-credit { margin: 0; font-size: 14px; color: var(--md-sys-color-on-surface-variant); }
+.nt-credit a { color: var(--md-sys-color-primary); }
